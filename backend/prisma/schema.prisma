@@ -1,0 +1,142 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  ADMIN
+  PM
+  PMO
+  DEPARTMENT_APPROVER
+  EXECUTIVE_READONLY
+  STANDARD_CONTRIBUTOR
+}
+
+enum ApprovalStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum WorkflowStatus {
+  SUBMITTED
+  IN_REVIEW
+  APPROVED_REUSABLE
+  REJECTED
+  CLOSED
+}
+
+enum Severity {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+model User {
+  id          String   @id @default(uuid())
+  displayName String
+  email       String   @unique
+  role        Role     @default(STANDARD_CONTRIBUTOR)
+  department  String
+  active      Boolean  @default(true)
+  azureAdId   String?  @unique
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  lessonsCreated Lesson[]        @relation("LessonCreator")
+  auditActions   ApprovalAudit[] @relation("AuditActor")
+
+  @@map("users")
+}
+
+model Lesson {
+  id                         String         @id @default(uuid())
+  lessonId                   String         @unique
+  workflowStatus             WorkflowStatus @default(SUBMITTED)
+  pmApproval                 ApprovalStatus @default(PENDING)
+  pmoApproval                ApprovalStatus @default(PENDING)
+  departmentApproval         ApprovalStatus @default(PENDING)
+  finalReusableApproval      ApprovalStatus @default(PENDING)
+  pmApprovalDate             DateTime?
+  pmoApprovalDate            DateTime?
+  departmentApprovalDate     DateTime?
+  finalApprovalDate          DateTime?
+  pmApprovalBy               String?
+  pmoApprovalBy              String?
+  departmentApprovalBy       String?
+  projectNumber              String
+  projectName                String
+  client                     String?
+  location                   String?
+  projectType                String?
+  system                     String
+  phase                      String
+  category                   String
+  severity                   Severity       @default(MEDIUM)
+  description                String
+  rootCause                  String?
+  lessonLearned              String?
+  preventiveAction           String?
+  costImpact                 Float          @default(0)
+  costAvoided                Float          @default(0)
+  scheduleImpact             Int            @default(0)
+  vendorRelated              Boolean        @default(false)
+  vendorName                 String?
+  claimsRelevant             Boolean        @default(false)
+  evidenceLink               String?
+  minutesLink                String?
+  createdByUserId            String
+  createdByDepartment        String
+  primaryResponsibleDepartment String
+  dateIdentified             DateTime       @default(now())
+  targetDate                 DateTime?
+  dateClosed                 DateTime?
+  createdAt                  DateTime       @default(now())
+  updatedAt                  DateTime       @updatedAt
+
+  createdBy    User            @relation("LessonCreator", fields: [createdByUserId], references: [id])
+  auditTrail   ApprovalAudit[] @relation("LessonAudit")
+
+  @@index([workflowStatus])
+  @@index([system])
+  @@index([phase])
+  @@index([severity])
+  @@index([primaryResponsibleDepartment])
+  @@index([projectNumber])
+  @@index([createdAt])
+  @@map("lessons")
+}
+
+model ApprovalAudit {
+  id              String   @id @default(uuid())
+  lessonId        String
+  actionType      String
+  oldValue        String?
+  newValue        String
+  changedByUserId String
+  changedByRole   String
+  changedAt       DateTime @default(now())
+  notes           String?
+
+  lesson    Lesson @relation("LessonAudit", fields: [lessonId], references: [id], onDelete: Cascade)
+  changedBy User   @relation("AuditActor", fields: [changedByUserId], references: [id])
+
+  @@index([lessonId])
+  @@index([changedAt])
+  @@map("approval_audits")
+}
+
+model ConfigThreshold {
+  id          String   @id @default(uuid())
+  key         String   @unique
+  value       String
+  description String?
+  updatedAt   DateTime @updatedAt
+
+  @@map("config_thresholds")
+}
